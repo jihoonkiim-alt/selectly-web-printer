@@ -58,6 +58,42 @@
       ]
     );
 
+    // English Facebook UI sample (2026-11-20) — "Reply" instead of "답글
+    // 달기", "Hide" moderation chrome, and "Author" badge on the post
+    // owner's own comments (which must be dropped entirely, not just
+    // have the badge text stripped).
+    const englishDump = `SunShine's Olaes
+ ·
+Up
+Reply
+Hide
+Ann Lee
+ ·
+Black and brick
+Reply
+Hide
+Roshane Besmonte
+ ·
+ ·
+
+Author
+May be an image of duffel coat
+Reply
+Roshane Besmonte
+ ·
+ ·
+
+Author`;
+
+    check(
+      'parseComments: 영문 UI("Reply") + Author 배지 댓글 제외',
+      parseComments(englishDump),
+      [
+        { authorName: "SunShine's Olaes", content: 'Up' },
+        { authorName: 'Ann Lee', content: 'Black and brick' },
+      ]
+    );
+
     // --- printDecision ---
     check('detectAmount: "mine star 7k" -> "7"', detectAmount('mine star 7k'), '7');
     check('detectAmount: 금액 없음 -> null', detectAmount('no amount here'), null);
