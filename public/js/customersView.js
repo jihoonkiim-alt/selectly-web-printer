@@ -1,9 +1,12 @@
-import { getOrders } from './api.js';
+import { getOrders, deleteOrder, updateOrder } from './api.js';
 import { groupByCustomer, shippingFee, buildCsv } from './invoiceService.js';
+import * as ble from './bleClient.js';
+import { buildReceiptTspl } from './tsplBuilder.js';
 
 const fromDateInput = document.getElementById('fromDate');
 const toDateInput = document.getElementById('toDate');
 const resetFilterBtn = document.getElementById('resetFilter');
+const downloadExcelBtn = document.getElementById('downloadExcelBtn');
 const rowsEl = document.getElementById('customerRows');
 const receiptContainer = document.getElementById('receiptContainer');
 const summaryEl = document.getElementById('summary');
@@ -13,6 +16,7 @@ let allOrders = [];
 let sortKey = 'subtotal';
 let sortDesc = true;
 let openCustomerKey = null;
+let editingItemId = null;
 const islandFlags = new Map(); // displayName -> boolean
 
 function dateOnly(isoString) {
@@ -28,6 +32,11 @@ function filteredOrders() {
     if (to && d > to) return false;
     return true;
   });
+}
+
+async function refreshOrders() {
+  allOrders = await getOrders();
+  render();
 }
 
 function render() {
@@ -54,6 +63,7 @@ function render() {
     tr.style.cursor = 'pointer';
     tr.addEventListener('click', () => {
       openCustomerKey = openCustomerKey === customer.displayName ? null : customer.displayName;
+      editingItemId = null;
       renderReceipt(customers);
     });
     rowsEl.appendChild(tr);
@@ -76,15 +86,8 @@ function renderReceipt(customers) {
   box.innerHTML = `
     <h3>${escapeHtml(customer.displayName)} 영수증 (Receipt)</h3>
     <table>
-      <thead><tr><th>내용 (Item)</th><th>금액 (Amount, 원/KRW)</th></tr></thead>
-      <tbody>
-        ${customer.items
-          .map(
-            (item) =>
-              `<tr><td>${escapeHtml(item.content)}</td><td>${item.amountWon.toLocaleString()}</td></tr>`
-          )
-          .join('')}
-      </tbody>
+      <thead><tr><th>내용 (Item)</th><th>금액 (Amount, 원/KRW)</th><th class="non-printable">작업 (Actions)</th></tr></thead>
+      <tbody id="itemRows"></tbody>
     </table>
     <label class="non-printable"><input type="checkbox" id="islandCheck" ${isIsland ? 'checked' : ''} /> 도서산간 배송 (Island shipping)</label>
     <div>소계 (Subtotal): ${customer.subtotal.toLocaleString()}원</div>
@@ -92,10 +95,16 @@ function renderReceipt(customers) {
     <div class="total">합계 (Total): ${total.toLocaleString()}원</div>
     <div class="actions non-printable">
       <button id="downloadCsvBtn">CSV 다운로드 (Download CSV)</button>
+      <button id="downloadImageBtn">이미지 다운로드 (Download Image)</button>
       <button id="printReceiptBtn">인쇄/PDF 저장 (Print/Save PDF)</button>
     </div>
   `;
   receiptContainer.appendChild(box);
+
+  const itemRowsEl = box.querySelector('#itemRows');
+  for (const item of customer.items) {
+    itemRowsEl.appendChild(renderItemRow(item, customer, customers));
+  }
 
   document.getElementById('islandCheck').addEventListener('change', (e) => {
     islandFlags.set(customer.displayName, e.target.checked);
@@ -113,9 +122,129 @@ function renderReceipt(customers) {
     URL.revokeObjectURL(url);
   });
 
+  document.getElementById('downloadImageBtn').addEventListener('click', async () => {
+    const hidden = box.querySelectorAll('.non-printable');
+    hidden.forEach((el) => (el.style.display = 'none'));
+    try {
+      const canvas = await html2canvas(box, { backgroundColor: '#ffffff', scale: 2 });
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${customer.displayName}-영수증.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    } catch (e) {
+      alert(`이미지 생성 실패 (Image generation failed): ${e.message}`);
+    } finally {
+      hidden.forEach((el) => (el.style.display = ''));
+    }
+  });
+
   document.getElementById('printReceiptBtn').addEventListener('click', () => {
     window.print();
   });
+}
+
+function renderItemRow(item, customer, customers) {
+  const tr = document.createElement('tr');
+
+  if (editingItemId === item.id) {
+    const tdContent = document.createElement('td');
+    const contentInput = document.createElement('input');
+    contentInput.type = 'text';
+    contentInput.value = item.content;
+    tdContent.appendChild(contentInput);
+
+    const tdAmount = document.createElement('td');
+    const amountInput = document.createElement('input');
+    amountInput.type = 'number';
+    amountInput.value = item.amountWon;
+    amountInput.style.width = '90px';
+    tdAmount.appendChild(amountInput);
+
+    const tdActions = document.createElement('td');
+    tdActions.className = 'non-printable';
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '✔ 저장 (Save)';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '✕ 취소 (Cancel)';
+    tdActions.append(saveBtn, cancelBtn);
+
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      try {
+        await updateOrder(item.id, {
+          content: contentInput.value,
+          amountWon: Number(amountInput.value) || 0,
+        });
+        editingItemId = null;
+        await refreshOrders();
+      } catch (e) {
+        alert(`수정 실패 (Update failed): ${e.message}`);
+        saveBtn.disabled = false;
+      }
+    });
+    cancelBtn.addEventListener('click', () => {
+      editingItemId = null;
+      renderReceipt(customers);
+    });
+
+    tr.append(tdContent, tdAmount, tdActions);
+    return tr;
+  }
+
+  tr.innerHTML = `
+    <td>${escapeHtml(item.content)}</td>
+    <td>${item.amountWon.toLocaleString()}</td>
+  `;
+  const tdActions = document.createElement('td');
+  tdActions.className = 'non-printable';
+  const editBtn = document.createElement('button');
+  editBtn.textContent = '✎ 수정 (Edit)';
+  const deleteBtn = document.createElement('button');
+  deleteBtn.textContent = '🗑 삭제 (Delete)';
+  const reprintBtn = document.createElement('button');
+  reprintBtn.textContent = '🖨 재인쇄 (Reprint)';
+  tdActions.append(editBtn, deleteBtn, reprintBtn);
+  tr.appendChild(tdActions);
+
+  editBtn.addEventListener('click', () => {
+    editingItemId = item.id;
+    renderReceipt(customers);
+  });
+
+  deleteBtn.addEventListener('click', async () => {
+    if (!confirm('이 주문을 삭제하시겠습니까? (Delete this order?)')) return;
+    deleteBtn.disabled = true;
+    try {
+      await deleteOrder(item.id);
+      await refreshOrders();
+    } catch (e) {
+      alert(`삭제 실패 (Delete failed): ${e.message}`);
+      deleteBtn.disabled = false;
+    }
+  });
+
+  reprintBtn.addEventListener('click', async () => {
+    reprintBtn.disabled = true;
+    try {
+      if (!ble.isConnected()) await ble.connect();
+      const tspl = buildReceiptTspl({
+        authorName: item.authorName,
+        printedAt: new Date(),
+        content: item.content,
+      });
+      await ble.writeTspl(tspl);
+    } catch (e) {
+      alert(`재인쇄 실패 (Reprint failed): ${e.message}`);
+    } finally {
+      reprintBtn.disabled = false;
+    }
+  });
+
+  return tr;
 }
 
 function escapeHtml(str) {
@@ -123,6 +252,39 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+function buildAllOrdersWorkbook(orders, customers) {
+  const orderRows = orders
+    .slice()
+    .sort((a, b) => a.printedAt.localeCompare(b.printedAt))
+    .map((o) => ({
+      '날짜 (Date)': dateOnly(o.printedAt),
+      '고객명 (Customer)': o.authorName,
+      '내용 (Content)': o.content,
+      '금액 (Amount, KRW)': o.amountWon,
+      '인쇄시각 (Printed At)': o.printedAt,
+    }));
+  const customerRows = customers.map((c) => ({
+    '고객명 (Customer)': c.displayName,
+    '건수 (Orders)': c.count,
+    '소계 (Subtotal, KRW)': c.subtotal,
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(orderRows), 'Orders');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customerRows), '고객별 합계');
+  return wb;
+}
+
+downloadExcelBtn.addEventListener('click', () => {
+  const orders = filteredOrders();
+  const customers = groupByCustomer(orders);
+  const wb = buildAllOrdersWorkbook(orders, customers);
+  const from = fromDateInput.value;
+  const to = toDateInput.value;
+  const label = from || to ? `${from || '처음'}~${to || '오늘'}` : '전체';
+  XLSX.writeFile(wb, `주문내역_${label}.xlsx`);
+});
 
 headerCells.forEach((th) => {
   th.addEventListener('click', () => {
@@ -145,11 +307,6 @@ resetFilterBtn.addEventListener('click', () => {
   render();
 });
 
-getOrders()
-  .then((orders) => {
-    allOrders = orders;
-    render();
-  })
-  .catch((e) => {
-    summaryEl.textContent = `주문 내역 로드 실패 (Failed to load orders): ${e.message}`;
-  });
+refreshOrders().catch((e) => {
+  summaryEl.textContent = `주문 내역 로드 실패 (Failed to load orders): ${e.message}`;
+});

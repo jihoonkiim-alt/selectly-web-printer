@@ -22,3 +22,8 @@ export async function addOrder(order) {
 export async function deleteOrder(id) {
   await sheetsReq('delete', { sheet: SHEET, id });
 }
+
+// patch: partial fields to overwrite, e.g. {content, amountWon}
+export async function updateOrder(id, patch) {
+  await sheetsReq('update', { sheet: SHEET, id, row: patch });
+}

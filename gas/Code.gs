@@ -33,6 +33,10 @@ function doGet(e) {
     } else if (action === 'delete') {
       deleteRow(e.parameter.sheet, e.parameter.id);
       result = { ok: true };
+    } else if (action === 'update') {
+      const patch = JSON.parse(e.parameter.row);
+      updateRow(e.parameter.sheet, e.parameter.id, patch);
+      result = { ok: true };
     } else {
       result = { ok: false, error: 'unknown action' };
     }
@@ -77,6 +81,26 @@ function deleteRow(name, id) {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][idCol]) === String(id)) {
       sheet.deleteRow(i + 1);
+      return;
+    }
+  }
+}
+
+// Patches only the fields present in `patch` — leaves the rest of the row
+// untouched (unlike appendRow, which writes a full row).
+function updateRow(name, id, patch) {
+  const sheet = SS.getSheetByName(name);
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idCol = headers.indexOf('id');
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(id)) {
+      headers.forEach((h, col) => {
+        if (patch[h] !== undefined) {
+          sheet.getRange(i + 1, col + 1).setValue(patch[h]);
+        }
+      });
       return;
     }
   }
