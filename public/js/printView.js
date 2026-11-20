@@ -160,16 +160,32 @@ function openModal(index) {
       enteredAmount: amountInput.disabled ? null : amountInput.value,
     });
 
+    let printedAt;
     try {
       if (!ble.isConnected()) {
         errorEl.textContent = '프린터 연결 중... (Connecting to printer...)';
         await ble.connect();
         updateStatus();
       }
-      const printedAt = new Date();
+      printedAt = new Date();
       const tspl = buildReceiptTspl({ authorName, printedAt, content: finalContent });
       await ble.writeTspl(tspl);
+    } catch (e) {
+      errorEl.textContent = `인쇄 실패 (Print failed): ${e.message}`;
+      updateStatus();
+      return;
+    }
 
+    // The label is physically printed at this point — mark it printed and
+    // close the modal regardless of what happens next, so the operator
+    // never sees "print failed" (and re-clicks, printing a duplicate
+    // label) for something that's actually a record-saving problem.
+    comment.printed = true;
+    renderList();
+    persistCurrent();
+    closeModal();
+
+    try {
       const detectedFinal = detectAmount(finalContent);
       const amountWon = detectedFinal ? Math.round(parseFloat(detectedFinal) * 1000) : 0;
 
@@ -179,14 +195,11 @@ function openModal(index) {
         amountWon,
         printedAt: printedAt.toISOString(),
       });
-
-      comment.printed = true;
-      renderList();
-      persistCurrent();
-      closeModal();
     } catch (e) {
-      errorEl.textContent = `인쇄 실패 (Print failed): ${e.message}`;
-      updateStatus();
+      alert(
+        `라벨은 출력됐지만 주문 기록 저장에 실패했습니다 (Label printed, but failed to save the order record): ${e.message}\n` +
+          '고객목록 매출 집계에서 빠지니 수동으로 확인해주세요. (This order will be missing from customer totals — please note it down manually.)'
+      );
     }
   });
 }
