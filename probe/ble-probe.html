@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>BLE UUID Probe</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  button { font-size: 16px; padding: 10px 16px; cursor: pointer; }
+  pre { background: #111; color: #0f0; padding: 12px; white-space: pre-wrap; word-break: break-all; min-height: 200px; }
+  .candidate { font-family: monospace; }
+</style>
+</head>
+<body>
+  <h1>XP-P326B BLE UUID 검증</h1>
+  <p>프린터를 BLE 페어링/검색 가능 상태로 켜고 아래 버튼을 눌러주세요. 크롬 기기 선택창에서 프린터를 고르면
+     어떤 서비스/캐릭터리스틱이 있는지 아래에 로그로 나옵니다.</p>
+  <p>후보 서비스 UUID:</p>
+  <ul>
+    <li class="candidate">(a) 00001101-0000-1000-8000-00805f9b34fb (SPP 재사용, BLE 아닐 가능성 큼)</li>
+    <li class="candidate">(b) 49535343-fe7d-4ae5-8fa9-9fafd205e455 (유력 후보 — ISSC/Microchip transparent UART)</li>
+    <li class="candidate">(c) a76eb9e0-f3ac-4990-84cf-3a94d2426b2b (벤더 커스텀)</li>
+  </ul>
+  <button id="scanBtn">프린터 연결 테스트</button>
+  <h3>로그</h3>
+  <pre id="log">(대기 중)</pre>
+
+  <script>
+    const CANDIDATE_SERVICES = [
+      '00001101-0000-1000-8000-00805f9b34fb',
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+      'a76eb9e0-f3ac-4990-84cf-3a94d2426b2b',
+    ];
+
+    const logEl = document.getElementById('log');
+    function log(line) {
+      logEl.textContent += '\n' + line;
+      console.log(line);
+    }
+
+    document.getElementById('scanBtn').addEventListener('click', async () => {
+      logEl.textContent = '';
+      if (!navigator.bluetooth) {
+        log('이 브라우저는 Web Bluetooth를 지원하지 않습니다. 크롬 데스크톱에서 열어주세요.');
+        return;
+      }
+      try {
+        log('기기 선택창 여는 중...');
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: CANDIDATE_SERVICES,
+        });
+        log(`선택된 기기: ${device.name || '(이름 없음)'} / id=${device.id}`);
+
+        log('GATT 서버 연결 중...');
+        const server = await device.gatt.connect();
+        log('GATT 연결 성공. 서비스 조회 중...');
+
+        for (const serviceUuid of CANDIDATE_SERVICES) {
+          try {
+            const service = await server.getPrimaryService(serviceUuid);
+            log(`\n✅ 서비스 발견: ${serviceUuid}`);
+            const chars = await service.getCharacteristics();
+            for (const c of chars) {
+              const props = c.properties;
+              const propList = Object.keys(props).filter((k) => props[k]).join(', ');
+              log(`   캐릭터리스틱 ${c.uuid} — 속성: [${propList}]`);
+            }
+          } catch (e) {
+            log(`❌ 서비스 없음: ${serviceUuid} (${e.message})`);
+          }
+        }
+
+        log('\n모든 기본 서비스 목록 (allow-list 무시):');
+        try {
+          const allServices = await server.getPrimaryServices();
+          for (const s of allServices) {
+            log(`  서비스: ${s.uuid}`);
+            const chars = await s.getCharacteristics();
+            for (const c of chars) {
+              const props = c.properties;
+              const propList = Object.keys(props).filter((k) => props[k]).join(', ');
+              log(`    - 캐릭터리스틱 ${c.uuid} — 속성: [${propList}]`);
+            }
+          }
+        } catch (e) {
+          log(`전체 서비스 목록 조회 실패: ${e.message}`);
+        }
+
+        log('\n완료. 위에서 "write" 또는 "writeWithoutResponse" 속성이 있는 캐릭터리스틱을 찾으세요.');
+      } catch (e) {
+        log(`에러: ${e.message}`);
+      }
+    });
+  </script>
+</body>
+</html>

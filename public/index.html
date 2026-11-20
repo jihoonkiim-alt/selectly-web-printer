@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Selectly 웹 인쇄 (Web Print)</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Selectly 웹 인쇄 (Web Print)</h1>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <span id="status" class="status"><span class="dot"></span><span id="statusText">연결 안 됨 (Not connected)</span></span>
+      <button id="connectBtn">프린터 연결 (Connect Printer)</button>
+      <button id="testPrintBtn">테스트 인쇄 (Test Print)</button>
+      <nav><a href="customers.html">고객 목록 (Customers) →</a> <a href="settings.html">⚙ 설정 (Settings)</a></nav>
+    </div>
+  </header>
+
+  <div class="history-bar non-printable">
+    <label>지난 기록 (Past records):
+      <select id="historySelect"></select>
+    </label>
+    <button id="backToTodayBtn" style="display:none;">오늘로 돌아가기 (Back to today)</button>
+  </div>
+  <div id="historyBanner" class="history-banner" style="display:none;">
+    지난 기록을 보는 중입니다 (Viewing a past record) — 읽기 전용 (read-only)
+  </div>
+
+  <p>페이스북 라이브 댓글창 텍스트를 전체 선택 → 복사해서 아래에 붙여넣으세요.<br/>
+  Select all the Facebook Live comment text → copy and paste it below.</p>
+  <textarea id="rawInput" placeholder="여기에 댓글 텍스트를 붙여넣으세요... (Paste comment text here...)"></textarea>
+  <div class="actions">
+    <button id="parseBtn" class="primary">파싱 (Parse)</button>
+    <button id="clearBtn">지우기 (Clear)</button>
+  </div>
+
+  <div id="list"></div>
+
+  <div id="modalRoot"></div>
+
+  <script type="module" src="js/printView.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>로직 자가진단</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  .pass { color: #2a2; }
+  .fail { color: #c33; font-weight: bold; }
+  pre { background: #8881; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <h1>로직 자가진단 (commentParser / printDecision / invoiceService)</h1>
+  <div id="results"></div>
+
+  <script type="module">
+    import { parseComments } from './js/commentParser.js';
+    import { detectAmount, buildContent } from './js/printDecision.js';
+    import { groupByCustomer, shippingFee, buildCsv } from './js/invoiceService.js';
+    import { todayKey, saveSession, loadSession, listDates, pruneOld } from './js/sessionStore.js';
+
+    const results = document.getElementById('results');
+    let passCount = 0;
+    let failCount = 0;
+
+    function check(label, actual, expected) {
+      const actualStr = JSON.stringify(actual);
+      const expectedStr = JSON.stringify(expected);
+      const pass = actualStr === expectedStr;
+      if (pass) passCount++; else failCount++;
+      const div = document.createElement('div');
+      div.innerHTML = `<span class="${pass ? 'pass' : 'fail'}">${pass ? '✅ PASS' : '❌ FAIL'}</span> — ${label}` +
+        (pass ? '' : `<pre>기대값: ${expectedStr}\n실제값: ${actualStr}</pre>`);
+      results.appendChild(div);
+    }
+
+    // --- commentParser ---
+    const sampleDump = `홍길동
+안녕하세요 7k 주문할게요
+3시간
+좋아요
+답글 달기
+1
+김영희
+저도 주문이요
+번역 보기
+2일
+좋아요
+답글 달기`;
+
+    check(
+      'parseComments: 2개 댓글 블록 추출',
+      parseComments(sampleDump),
+      [
+        { authorName: '홍길동', content: '안녕하세요 7k 주문할게요' },
+        { authorName: '김영희', content: '저도 주문이요' },
+      ]
+    );
+
+    // --- printDecision ---
+    check('detectAmount: "mine star 7k" -> "7"', detectAmount('mine star 7k'), '7');
+    check('detectAmount: 금액 없음 -> null', detectAmount('no amount here'), null);
+    check(
+      'buildContent: 이미 금액 있으면 그대로',
+      buildContent({ message: '7k 주세요', enteredAmount: '10' }),
+      '7k 주세요'
+    );
+    check(
+      'buildContent: 입력 금액 있으면 괄호로 추가',
+      buildContent({ message: '주문이요', enteredAmount: '5' }),
+      '주문이요 (5k)'
+    );
+    check(
+      'buildContent: 둘 다 없으면 그대로',
+      buildContent({ message: '주문이요', enteredAmount: '' }),
+      '주문이요'
+    );
+
+    // --- invoiceService ---
+    const orders = [
+      { authorName: '홍길동', content: 'a', amountWon: 7000, printedAt: '2026-01-01T00:00:00Z' },
+      { authorName: ' 홍길동 ', content: 'b', amountWon: 3000, printedAt: '2026-01-02T00:00:00Z' },
+      { authorName: '김영희', content: 'c', amountWon: 5000, printedAt: '2026-01-01T00:00:00Z' },
+    ];
+    const grouped = groupByCustomer(orders);
+    check('groupByCustomer: 2명으로 그룹화 (이름 trim 무시)', grouped.map((g) => g.displayName), ['홍길동', '김영희']);
+    check('groupByCustomer: 홍길동 소계 10000', grouped[0].subtotal, 10000);
+    check('shippingFee: 표준 5000', shippingFee({ isIsland: false }), 5000);
+    check('shippingFee: 도서산간 6000', shippingFee({ isIsland: true }), 6000);
+
+    const csv = buildCsv(orders);
+    check('buildCsv: 헤더 포함', csv.startsWith('Author Name,Content,Amount (KRW),Printed At'), true);
+
+    // --- sessionStore ---
+    localStorage.clear();
+    saveSession('2026-01-01', { rawText: 'hello', comments: [{ authorName: 'a', content: 'b', printed: false }] });
+    saveSession(todayKey(), { rawText: 'today text', comments: [] });
+    check('loadSession: 저장한 내용 그대로 복원', loadSession('2026-01-01'), {
+      rawText: 'hello',
+      comments: [{ authorName: 'a', content: 'b', printed: false }],
+    });
+    check('listDates: 저장된 날짜 모두 포함', listDates().sort(), ['2026-01-01', todayKey()].sort());
+
+    // pruneOld should drop anything older than 30 days but keep today's.
+    pruneOld();
+    check('pruneOld: 30일 지난 기록(2026-01-01) 삭제됨', loadSession('2026-01-01'), null);
+    check('pruneOld: 오늘 기록은 유지됨', loadSession(todayKey()), { rawText: 'today text', comments: [] });
+    localStorage.clear();
+
+    const summary = document.createElement('h3');
+    summary.textContent = `결과: ${passCount} PASS / ${failCount} FAIL`;
+    results.prepend(summary);
+  </script>
+</body>
+</html>

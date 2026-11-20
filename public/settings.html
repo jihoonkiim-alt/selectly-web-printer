@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>설정 (Settings) — Selectly 웹 인쇄</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>설정 (Settings)</h1>
+    <nav><a href="index.html">← 인쇄 화면 (Print)</a></nav>
+  </header>
+
+  <p>
+    Google Apps Script 배포 후 생성된 Web App 주소와 토큰을 여기에 붙여넣으세요.<br/>
+    Paste the Web App URL and shared token here, generated after deploying the Google Apps Script backend.<br/>
+    이 값은 이 브라우저에만(localStorage) 저장되고 공개 페이지 소스에는 포함되지 않습니다.<br/>
+    This is stored only in this browser (localStorage), not in the public page source.
+  </p>
+
+  <label>Web App URL (…/exec)</label>
+  <input type="text" id="urlInput" placeholder="https://script.google.com/macros/s/.../exec" />
+
+  <label>토큰 (Token)</label>
+  <input type="text" id="tokenInput" placeholder="setToken()으로 설정한 값과 동일하게 (same value set via setToken())" />
+
+  <div class="actions">
+    <button id="saveBtn" class="primary">저장 (Save)</button>
+    <button id="testBtn">연결 테스트 (Test Connection)</button>
+  </div>
+  <div id="resultText" style="margin-top:12px;"></div>
+
+  <script type="module" src="js/settingsView.js"></script>
+</body>
+</html>
