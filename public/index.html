@@ -4,11 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Selectly 웹 인쇄 (Web Print)</title>
+<link rel="icon" href="assets/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
+<link rel="apple-touch-icon" href="assets/favicon-180.png" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
-    <h1>Selectly 웹 인쇄 (Web Print)</h1>
+    <div class="brand">
+      <img src="assets/selectly-logo.png" alt="Selectly" />
+      <span class="tagline">웹 인쇄 (Web Print)</span>
+    </div>
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <span id="status" class="status"><span class="dot"></span><span id="statusText">연결 안 됨 (Not connected)</span></span>
       <button id="connectBtn">프린터 연결 (Connect Printer)</button>

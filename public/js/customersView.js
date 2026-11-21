@@ -81,18 +81,27 @@ function renderReceipt(customers) {
   const shipping = shippingFee({ isIsland });
   const total = customer.subtotal + shipping;
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const box = document.createElement('div');
   box.className = 'receipt';
   box.innerHTML = `
-    <h3>${escapeHtml(customer.displayName)} 영수증 (Receipt)</h3>
+    <img class="r-logo" src="assets/selectly-logo.png" alt="Selectly" />
+    <div class="r-sub">주문 영수증 (Order Receipt)</div>
+    <div class="r-row"><span>고객 (Customer)</span><b>${escapeHtml(customer.displayName)}</b></div>
+    <div class="r-row"><span>발행일 (Date)</span><span>${today}</span></div>
+    <hr class="r-divider" />
     <table>
-      <thead><tr><th>내용 (Item)</th><th>금액 (Amount, 원/KRW)</th><th class="non-printable">작업 (Actions)</th></tr></thead>
+      <thead><tr><th>내용 (Item)</th><th>금액 (KRW)</th><th class="non-printable">작업</th></tr></thead>
       <tbody id="itemRows"></tbody>
     </table>
     <label class="non-printable"><input type="checkbox" id="islandCheck" ${isIsland ? 'checked' : ''} /> 도서산간 배송 (Island shipping)</label>
-    <div>소계 (Subtotal): ${customer.subtotal.toLocaleString()}원</div>
-    <div>배송비 (Shipping): ${shipping.toLocaleString()}원</div>
-    <div class="total">합계 (Total): ${total.toLocaleString()}원</div>
+    <div class="r-totals">
+      <div class="r-row"><span>소계 (Subtotal)</span><span>${customer.subtotal.toLocaleString()}원</span></div>
+      <div class="r-row"><span>배송비 (Shipping)</span><span>${shipping.toLocaleString()}원</span></div>
+    </div>
+    <div class="r-total"><span class="label">합계 (Total)</span><span class="amount">${total.toLocaleString()}원</span></div>
+    <div class="r-thanks">감사합니다 (Thank you for your order!)</div>
     <div class="actions non-printable">
       <button id="downloadCsvBtn">CSV 다운로드 (Download CSV)</button>
       <button id="downloadImageBtn">이미지 다운로드 (Download Image)</button>
@@ -126,7 +135,7 @@ function renderReceipt(customers) {
     const hidden = box.querySelectorAll('.non-printable');
     hidden.forEach((el) => (el.style.display = 'none'));
     try {
-      const canvas = await html2canvas(box, { backgroundColor: '#ffffff', scale: 2 });
+      const canvas = await html2canvas(box, { backgroundColor: null, scale: 2 });
       canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -165,11 +174,14 @@ function renderItemRow(item, customer, customers) {
     tdAmount.appendChild(amountInput);
 
     const tdActions = document.createElement('td');
-    tdActions.className = 'non-printable';
+    tdActions.className = 'non-printable r-item-actions';
     const saveBtn = document.createElement('button');
-    saveBtn.textContent = '✔ 저장 (Save)';
+    saveBtn.className = 'primary';
+    saveBtn.title = '저장 (Save)';
+    saveBtn.textContent = '✔';
     const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '✕ 취소 (Cancel)';
+    cancelBtn.title = '취소 (Cancel)';
+    cancelBtn.textContent = '✕';
     tdActions.append(saveBtn, cancelBtn);
 
     saveBtn.addEventListener('click', async () => {
@@ -200,13 +212,17 @@ function renderItemRow(item, customer, customers) {
     <td>${item.amountWon.toLocaleString()}</td>
   `;
   const tdActions = document.createElement('td');
-  tdActions.className = 'non-printable';
+  tdActions.className = 'non-printable r-item-actions';
   const editBtn = document.createElement('button');
-  editBtn.textContent = '✎ 수정 (Edit)';
+  editBtn.title = '수정 (Edit)';
+  editBtn.textContent = '✎';
   const deleteBtn = document.createElement('button');
-  deleteBtn.textContent = '🗑 삭제 (Delete)';
+  deleteBtn.className = 'danger';
+  deleteBtn.title = '삭제 (Delete)';
+  deleteBtn.textContent = '🗑';
   const reprintBtn = document.createElement('button');
-  reprintBtn.textContent = '🖨 재인쇄 (Reprint)';
+  reprintBtn.title = '재인쇄 (Reprint)';
+  reprintBtn.textContent = '🖨';
   tdActions.append(editBtn, deleteBtn, reprintBtn);
   tr.appendChild(tdActions);
 
